@@ -14,6 +14,12 @@ export interface Task {
   isRoutine: boolean;
   completedPomodoros: number;
   isCurrent: boolean;
+  subtasks: Array<{
+    id: string;
+    title: string;
+    completed: boolean;
+  }>;
+  notes: string;
 }
 
 interface Routine {

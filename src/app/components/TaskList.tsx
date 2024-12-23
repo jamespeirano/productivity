@@ -2,9 +2,14 @@
 
 import { useState } from 'react';
 import { useProjects } from '../contexts/ProjectContext';
+import { Task } from '../contexts/ProjectContext';
 
 interface TaskListProps {
   hideAddProject?: boolean;
+}
+
+interface TaskWithProject extends Task {
+  projectId: string;
 }
 
 export default function TaskList({ hideAddProject = false }: TaskListProps) {
@@ -35,6 +40,11 @@ export default function TaskList({ hideAddProject = false }: TaskListProps) {
   const [isRoutineTask, setIsRoutineTask] = useState(false);
   const [editingTaskTime, setEditingTaskTime] = useState<{ [key: string]: number }>({});
   const [viewMode, setViewMode] = useState<'today' | 'all' | 'completed'>('today');
+  const [taskNotes, setTaskNotes] = useState('');
+  const [newSubtask, setNewSubtask] = useState('');
+  const [subtasks, setSubtasks] = useState<Array<{ id: string; title: string; completed: boolean }>>([]);
+  const [editingTask, setEditingTask] = useState<TaskWithProject | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   // Calculate streak for a task
   const getTaskStreak = (task: any) => {
@@ -139,49 +149,50 @@ export default function TaskList({ hideAddProject = false }: TaskListProps) {
 
   const handleAddStandaloneTask = (e: React.FormEvent) => {
     e.preventDefault();
-    if (standaloneTaskTitle.trim()) {
-      const task = {
-        title: standaloneTaskTitle,
-        completed: false,
-        estimatedTime: standaloneTaskTime,
-        completedTime: 0,
-        forToday: selectedDate === new Date().toISOString().split('T')[0],
-        plannedTime: standaloneTaskPlannedTime || 'Unset time',
-        dueDate: selectedDate,
-        isRoutine: isRoutineTask,
-        completedPomodoros: 0,
-        isCurrent: false
-      };
-      addTask(selectedProjectId, task);
-      setStandaloneTaskTitle('');
-      setStandaloneTaskTime(30);
-      setStandaloneTaskPlannedTime('');
-      setSelectedProjectId('standalone');
-      setSelectedDate(new Date().toISOString().split('T')[0]);
-      setIsRoutineTask(false);
-      setIsAddingTask(false);
-    }
+    if (!standaloneTaskTitle.trim()) return;
+
+    const newTask = {
+      title: standaloneTaskTitle,
+      completed: false,
+      estimatedTime: standaloneTaskTime,
+      completedTime: 0,
+      forToday: true,
+      plannedTime: standaloneTaskPlannedTime || undefined,
+      dueDate: selectedDate,
+      isRoutine: isRoutineTask,
+      completedPomodoros: 0,
+      isCurrent: false,
+      subtasks: subtasks,
+      notes: taskNotes
+    };
+
+    addTask(selectedProjectId, newTask);
+    setStandaloneTaskTitle('');
+    setStandaloneTaskTime(30);
+    setStandaloneTaskPlannedTime('');
+    setSelectedProjectId('standalone');
+    setSelectedDate(new Date().toISOString().split('T')[0]);
+    setIsRoutineTask(false);
+    setTaskNotes('');
+    setSubtasks([]);
+    setIsAddingTask(false);
   };
 
-  const handleAddSubtask = (e: React.FormEvent, projectId: string) => {
-    e.preventDefault();
-    if (newTaskTitle.trim()) {
-      const task = {
-        title: newTaskTitle,
-        completed: false,
-        estimatedTime: editingTaskTime[projectId] || 30,
-        completedTime: 0,
-        forToday: !projects.find(p => p.id === projectId)?.isRoutine,
-        plannedTime: 'Unset time',
-        dueDate: new Date().toISOString().split('T')[0],
-        isRoutine: false,
-        completedPomodoros: 0,
-        isCurrent: false
-      };
-      addTask(projectId, task);
-      setNewTaskTitle('');
-      setEditingTaskTime(prev => ({ ...prev, [projectId]: 30 }));
-    }
+  const handleAddSubtask = () => {
+    if (!newSubtask.trim()) return;
+    setSubtasks([
+      ...subtasks,
+      {
+        id: Date.now().toString(),
+        title: newSubtask.trim(),
+        completed: false
+      }
+    ]);
+    setNewSubtask('');
+  };
+
+  const handleRemoveSubtask = (subtaskId: string) => {
+    setSubtasks(subtasks.filter(subtask => subtask.id !== subtaskId));
   };
 
   const handleUpdateTaskTime = (projectId: string, taskId: string, newTime: number) => {
@@ -198,6 +209,28 @@ export default function TaskList({ hideAddProject = false }: TaskListProps) {
 
   const minutesToHours = (minutes: number) => (minutes / 60).toFixed(1);
   const hoursToMinutes = (hours: number) => Math.round(hours * 60);
+
+  const handleEditTask = (task: TaskWithProject) => {
+    setEditingTask(task);
+    setIsEditModalOpen(true);
+  };
+
+  const handleUpdateTask = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTask) return;
+
+    updateTask(editingTask.projectId, editingTask.id, {
+      title: editingTask.title,
+      estimatedTime: editingTask.estimatedTime,
+      dueDate: editingTask.dueDate,
+      isRoutine: editingTask.isRoutine,
+      subtasks: editingTask.subtasks,
+      notes: editingTask.notes
+    });
+
+    setIsEditModalOpen(false);
+    setEditingTask(null);
+  };
 
   if (hideAddProject) {
     // Today's view
@@ -304,6 +337,15 @@ export default function TaskList({ hideAddProject = false }: TaskListProps) {
                       </div>
                     </div>
                     <div className="flex items-center gap-4">
+                      <button
+                        onClick={() => handleEditTask(task)}
+                        className="text-gray-400 hover:text-blue-500 transition-colors"
+                        title="Edit task"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                          <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                        </svg>
+                      </button>
                       <span className="text-sm text-gray-600">
                         {task.estimatedTime} min
                       </span>
@@ -373,6 +415,15 @@ export default function TaskList({ hideAddProject = false }: TaskListProps) {
                         </div>
                       </div>
                       <div className="flex items-center gap-4">
+                        <button
+                          onClick={() => handleEditTask(task)}
+                          className="text-gray-400 hover:text-blue-500 transition-colors"
+                          title="Edit task"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                          </svg>
+                        </button>
                         <span className="text-sm text-gray-600">
                           {task.estimatedTime} min
                         </span>
@@ -431,6 +482,15 @@ export default function TaskList({ hideAddProject = false }: TaskListProps) {
                       </div>
                     </div>
                     <div className="flex items-center gap-4">
+                      <button
+                        onClick={() => handleEditTask(task)}
+                        className="text-gray-400 hover:text-blue-500 transition-colors"
+                        title="Edit task"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                          <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                        </svg>
+                      </button>
                       <span className="text-sm text-gray-600">
                         {task.estimatedTime} min
                       </span>
@@ -503,7 +563,7 @@ export default function TaskList({ hideAddProject = false }: TaskListProps) {
         {/* Add Task Modal */}
         {isAddingTask && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-medium text-gray-900">Add Task</h3>
                 <button
@@ -613,6 +673,65 @@ export default function TaskList({ hideAddProject = false }: TaskListProps) {
                   </div>
                 </div>
 
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Notes
+                  </label>
+                  <textarea
+                    value={taskNotes}
+                    onChange={(e) => setTaskNotes(e.target.value)}
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900"
+                    placeholder="Add any notes or details about the task..."
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Subtasks
+                  </label>
+                  <div className="space-y-2">
+                    {subtasks.map((subtask) => (
+                      <div key={subtask.id} className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={subtask.completed}
+                          onChange={() => {
+                            setSubtasks(subtasks.map(st =>
+                              st.id === subtask.id ? { ...st, completed: !st.completed } : st
+                            ));
+                          }}
+                          className="rounded text-blue-500"
+                        />
+                        <span className="flex-1">{subtask.title}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveSubtask(subtask.id)}
+                          className="text-red-500 hover:text-red-700"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={newSubtask}
+                        onChange={(e) => setNewSubtask(e.target.value)}
+                        placeholder="Add a subtask"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-gray-900"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddSubtask}
+                        className="px-3 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="flex justify-end gap-2 mt-6">
                   <button
                     type="button"
@@ -670,6 +789,161 @@ export default function TaskList({ hideAddProject = false }: TaskListProps) {
                     className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
                   >
                     Add Goal
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Edit Task Modal */}
+        {isEditModalOpen && editingTask && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-medium text-gray-900">Edit Task</h3>
+                <button
+                  onClick={() => {
+                    setIsEditModalOpen(false);
+                    setEditingTask(null);
+                  }}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  ✕
+                </button>
+              </div>
+              <form onSubmit={handleUpdateTask} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Task Name
+                  </label>
+                  <input
+                    type="text"
+                    value={editingTask.title}
+                    onChange={(e) => setEditingTask({ ...editingTask, title: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Estimated Duration (minutes)
+                  </label>
+                  <input
+                    type="number"
+                    value={editingTask.estimatedTime}
+                    onChange={(e) => setEditingTask({ ...editingTask, estimatedTime: Math.max(1, parseInt(e.target.value) || 1) })}
+                    min="1"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Due Date
+                  </label>
+                  <input
+                    type="date"
+                    value={editingTask.dueDate}
+                    onChange={(e) => setEditingTask({ ...editingTask, dueDate: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      checked={editingTask.isRoutine}
+                      onChange={(e) => setEditingTask({ ...editingTask, isRoutine: e.target.checked })}
+                      className="rounded text-blue-500"
+                    />
+                    <span className="text-sm font-medium text-gray-700">Daily Routine</span>
+                  </label>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Notes
+                  </label>
+                  <textarea
+                    value={editingTask.notes}
+                    onChange={(e) => setEditingTask({ ...editingTask, notes: e.target.value })}
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Subtasks
+                  </label>
+                  <div className="space-y-2">
+                    {editingTask.subtasks.map((subtask) => (
+                      <div key={subtask.id} className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={subtask.completed}
+                          onChange={() => {
+                            setEditingTask({
+                              ...editingTask,
+                              subtasks: editingTask.subtasks.map(st =>
+                                st.id === subtask.id ? { ...st, completed: !st.completed } : st
+                              )
+                            });
+                          }}
+                          className="rounded text-blue-500"
+                        />
+                        <span className="flex-1">{subtask.title}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingTask({
+                              ...editingTask,
+                              subtasks: editingTask.subtasks.filter(st => st.id !== subtask.id)
+                            });
+                          }}
+                          className="text-red-500 hover:text-red-700"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={newSubtask}
+                        onChange={(e) => setNewSubtask(e.target.value)}
+                        placeholder="Add a subtask"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-gray-900"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddSubtask}
+                        className="px-3 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 mt-6">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsEditModalOpen(false);
+                      setEditingTask(null);
+                    }}
+                    className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
+                  >
+                    Save Changes
                   </button>
                 </div>
               </form>
