@@ -7,9 +7,9 @@ interface TabNavigationProps {
 
 export default function TabNavigation({ activeTab, onTabChange }: TabNavigationProps) {
   const tabs = [
-    { id: 'today', label: 'Today', icon: '🕒' },
+    { id: 'today', label: 'Today', icon: '📝' },
+    { id: 'timer', label: 'Timer', icon: '⏱️' },
     { id: 'calendar', label: 'Calendar', icon: '📅' },
-    { id: 'tasks', label: 'Tasks', icon: '📝' },
     { id: 'settings', label: 'Settings', icon: '⚙️' },
   ];
 

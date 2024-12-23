@@ -2,12 +2,16 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
-interface Task {
+export interface Task {
   id: string;
   title: string;
   completed: boolean;
   estimatedTime: number;
   completedTime: number;
+  forToday: boolean;
+  plannedTime?: string;
+  dueDate: string;
+  isRoutine: boolean;
 }
 
 interface Routine {
@@ -140,9 +144,14 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   const addTask = (projectId: string, task: Omit<Task, 'id'>) => {
     const updatedProjects = projects.map(project => {
       if (project.id === projectId || (projectId === 'standalone' && project.name === 'Standalone Tasks')) {
+        const isRoutineProject = project.isRoutine || (projectId === 'standalone' && project.name === 'Standalone Tasks');
         return {
           ...project,
-          tasks: [...project.tasks, { ...task, id: Date.now().toString() }],
+          tasks: [...project.tasks, { 
+            ...task, 
+            id: Date.now().toString(), 
+            forToday: isRoutineProject ? true : task.forToday 
+          }],
         };
       }
       return project;
@@ -153,7 +162,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       const standaloneProject: Project = {
         id: 'standalone',
         name: 'Standalone Tasks',
-        tasks: [{ ...task, id: Date.now().toString() }],
+        tasks: [{ ...task, id: Date.now().toString(), forToday: true }],
         dailyGoalHours: 0,
         dailyTimeSpent: 0,
         isRoutine: false,
@@ -230,7 +239,14 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       if (project.id === projectId) {
         return {
           ...project,
-          dailyTimeSpent: project.dailyTimeSpent + additionalHours
+          dailyTimeSpent: project.dailyTimeSpent + additionalHours,
+          // Only update tasks if it's not a routine
+          tasks: project.isRoutine ? project.tasks : project.tasks.map(task => 
+            !task.completed ? {
+              ...task,
+              completedTime: task.completedTime + (additionalHours * 60)
+            } : task
+          )
         };
       }
       return project;
@@ -243,7 +259,15 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     const resetDailyTimeSpent = () => {
       const updatedProjects = projects.map(project => ({
         ...project,
-        dailyTimeSpent: 0
+        dailyTimeSpent: 0,
+        // Reset tasks based on whether they're routine or not
+        tasks: project.tasks.map(task => ({
+          ...task,
+          completed: false,
+          completedTime: 0,
+          // Routine tasks are always for today, non-routine tasks need to be marked
+          forToday: project.isRoutine ? true : false
+        }))
       }));
       const updatedRoutines = routines.map(routine => ({
         ...routine,
