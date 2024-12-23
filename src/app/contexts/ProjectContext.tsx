@@ -12,6 +12,8 @@ export interface Task {
   plannedTime?: string;
   dueDate: string;
   isRoutine: boolean;
+  completedPomodoros: number;
+  isCurrent: boolean;
 }
 
 interface Routine {
@@ -47,6 +49,7 @@ interface ProjectContextType {
   updateProject: (projectId: string, updates: Partial<Project>) => void;
   updateProjectTimeSpent: (projectId: string, additionalHours: number) => void;
   updateRoutineTimeSpent: (routineId: string, additionalHours: number) => void;
+  setCurrentTask: (projectId: string | null, taskId: string | null) => void;
 }
 
 const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
@@ -255,6 +258,18 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     saveToLocalStorage(updatedProjects, routines);
   };
 
+  const setCurrentTask = (projectId: string | null, taskId: string | null) => {
+    const updatedProjects = projects.map(project => ({
+      ...project,
+      tasks: project.tasks.map(task => ({
+        ...task,
+        isCurrent: project.id === projectId && task.id === taskId
+      }))
+    }));
+    setProjects(updatedProjects);
+    saveToLocalStorage(updatedProjects, routines);
+  };
+
   useEffect(() => {
     const resetDailyTimeSpent = () => {
       const updatedProjects = projects.map(project => ({
@@ -312,6 +327,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
         updateProject,
         updateProjectTimeSpent,
         updateRoutineTimeSpent,
+        setCurrentTask,
       }}
     >
       {children}

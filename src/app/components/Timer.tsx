@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useSettings } from '../contexts/SettingsContext';
 import { useProjects } from '../contexts/ProjectContext';
+import { Task } from '../contexts/ProjectContext';
 
 type TimerMode = 'pomodoro' | 'shortBreak' | 'longBreak';
 
@@ -14,12 +15,43 @@ interface TimerProps {
 
 export default function Timer({ onSessionComplete, isAddingProject, onAddProjectClose }: TimerProps) {
   const { settings } = useSettings();
-  const { projects, currentProject, addProject, updateTask, updateProjectTimeSpent } = useProjects();
+  const { 
+    projects, 
+    currentProject,
+    updateTask, 
+    updateProjectTimeSpent, 
+    addProject,
+    setCurrentTask 
+  } = useProjects();
   const [timeLeft, setTimeLeft] = useState(settings.pomodoroTime * 60);
   const [isRunning, setIsRunning] = useState(false);
   const [mode, setMode] = useState<TimerMode>('pomodoro');
   const [pomodoroCount, setPomodoroCount] = useState(0);
   const [newProjectName, setNewProjectName] = useState('');
+
+  // Calculate today's workload and remaining time
+  const getTodayWorkload = () => {
+    const today = new Date().toISOString().split('T')[0];
+    const todayTasks = projects.flatMap(project => 
+      project.tasks
+        .filter(task => (task.dueDate === today || task.isRoutine) && !task.completed)
+        .map(task => ({
+          ...task,
+          estimatedTime: task.estimatedTime || 0,
+          completedTime: task.completedTime || 0
+        }))
+    );
+
+    const totalEstimatedMinutes = todayTasks.reduce((total, task) => total + task.estimatedTime, 0);
+    const totalCompletedMinutes = todayTasks.reduce((total, task) => total + task.completedTime, 0);
+    
+    return {
+      totalWorkload: totalEstimatedMinutes,
+      remainingTime: Math.max(0, totalEstimatedMinutes - totalCompletedMinutes)
+    };
+  };
+
+  const { totalWorkload, remainingTime } = getTodayWorkload();
 
   useEffect(() => {
     // Update timer when settings change
@@ -49,10 +81,12 @@ export default function Timer({ onSessionComplete, isAddingProject, onAddProject
         if (currentProject) {
           updateProjectTimeSpent(currentProject.id, hoursWorked);
           
-          const activeTask = currentProject.tasks.find(task => !task.completed);
-          if (activeTask) {
-            updateTask(currentProject.id, activeTask.id, {
-              completedPomodoros: activeTask.completedPomodoros + 1
+          // Find the current task and update it
+          const currentTask = getCurrentTask();
+          if (currentTask) {
+            updateTask(currentTask.projectId, currentTask.id, {
+              completedPomodoros: currentTask.completedPomodoros + 1,
+              completedTime: currentTask.completedTime + (settings.pomodoroTime)
             });
           }
         }
@@ -68,18 +102,28 @@ export default function Timer({ onSessionComplete, isAddingProject, onAddProject
         setMode('pomodoro');
       }
       setIsRunning(false);
+      localStorage.setItem('pomodoroTimerRunning', 'false');
     }
 
     return () => clearInterval(interval);
   }, [isRunning, timeLeft, mode, settings.pomodoroTime, onSessionComplete, pomodoroCount, currentProject, updateTask, updateProjectTimeSpent]);
 
   const toggleTimer = () => {
-    setIsRunning(!isRunning);
+    // Only allow starting if there's a current task
+    if (!isRunning && !getCurrentTask()) {
+      alert('Please select a task before starting the timer');
+      return;
+    }
+
+    const newIsRunning = !isRunning;
+    setIsRunning(newIsRunning);
+    localStorage.setItem('pomodoroTimerRunning', newIsRunning.toString());
   };
 
   const resetTimer = () => {
     setTimeLeft(settings.pomodoroTime * 60);
     setIsRunning(false);
+    localStorage.setItem('pomodoroTimerRunning', 'false');
     setMode('pomodoro');
     setPomodoroCount(0);
   };
@@ -87,6 +131,7 @@ export default function Timer({ onSessionComplete, isAddingProject, onAddProject
   const switchMode = (newMode: TimerMode) => {
     setMode(newMode);
     setIsRunning(false);
+    localStorage.setItem('pomodoroTimerRunning', 'false');
     if (newMode === 'pomodoro') {
       setTimeLeft(settings.pomodoroTime * 60);
     } else if (newMode === 'shortBreak') {
@@ -119,13 +164,89 @@ export default function Timer({ onSessionComplete, isAddingProject, onAddProject
     }
   };
 
-  // Calculate remaining pomodoros needed
-  const getRemainingPomodoros = () => {
-    if (!currentProject || !currentProject.dailyGoalHours) return 0;
-    const totalPomodorosNeeded = Math.ceil((currentProject.dailyGoalHours * 60) / settings.pomodoroTime);
-    const completedPomodoros = Math.floor((currentProject.dailyTimeSpent * 60) / settings.pomodoroTime);
-    return Math.max(0, totalPomodorosNeeded - completedPomodoros);
+  // Get current task
+  const getCurrentTask = () => {
+    for (const project of projects) {
+      const currentTask = project.tasks.find(task => task.isCurrent);
+      if (currentTask) {
+        return {
+          ...currentTask,
+          projectName: project.name,
+          projectId: project.id,
+          streak: currentTask.isRoutine ? getTaskStreak(currentTask, project.id) : 0
+        };
+      }
+    }
+    return null;
   };
+
+  // Calculate streak for a task
+  const getTaskStreak = (task: Task, projectId: string) => {
+    if (!task.isRoutine) return 0;
+    
+    const today = new Date();
+    let streak = 1;
+    let currentDate = new Date(task.dueDate);
+    
+    // Count backwards from the current date
+    while (true) {
+      currentDate.setDate(currentDate.getDate() - 1);
+      const dateString = currentDate.toISOString().split('T')[0];
+      
+      // Check if this task was completed on this date
+      const wasCompletedOnDate = projects
+        .find(p => p.id === projectId)
+        ?.tasks.some(t => 
+          t.title === task.title && 
+          t.completed && 
+          t.dueDate === dateString
+        );
+      
+      if (!wasCompletedOnDate) break;
+      streak++;
+    }
+    
+    return streak;
+  };
+
+  // Get available tasks
+  const getAvailableTasks = () => {
+    const today = new Date().toISOString().split('T')[0];
+    return projects.flatMap(project => 
+      project.tasks
+        .filter(task => !task.completed && (task.dueDate === today || task.isRoutine))
+        .map(task => ({
+          ...task,
+          projectName: project.name,
+          projectId: project.id,
+          streak: task.isRoutine ? getTaskStreak(task, project.id) : 0
+        }))
+    );
+  };
+
+  const handleStartTask = (taskId: string, projectId: string) => {
+    if (isRunning) {
+      alert('Cannot change tasks during an active pomodoro session');
+      return;
+    }
+
+    // Find the task we want to select/deselect
+    const targetTask = projects
+      .find(p => p.id === projectId)
+      ?.tasks.find(t => t.id === taskId);
+
+    if (!targetTask) return;
+
+    // If this task is already current, unselect it
+    if (targetTask.isCurrent) {
+      setCurrentTask(null, null);
+    } else {
+      setCurrentTask(projectId, taskId);
+    }
+  };
+
+  const currentTask = getCurrentTask();
+  const availableTasks = getAvailableTasks();
 
   return (
     <div className={`${getBackgroundColor()} rounded-lg shadow-lg p-8 text-white`}>
@@ -212,28 +333,33 @@ export default function Timer({ onSessionComplete, isAddingProject, onAddProject
               </button>
             </div>
 
-            {currentProject && (
-              <div className="text-center space-y-2">
-                <div className="text-xl font-medium">
-                  Working on {currentProject.name}
-                </div>
-                {currentProject.dailyGoalHours > 0 && (
-                  <>
-                    <div className="text-lg opacity-90">
-                      {Math.max(0, currentProject.dailyGoalHours - currentProject.dailyTimeSpent).toFixed(1)} hours left today
-                    </div>
-                    <div className="text-lg opacity-90">
-                      {getRemainingPomodoros()} pomodoros to go
-                    </div>
-                  </>
-                )}
-                {currentProject.tasks.some(task => !task.completed) && (
-                  <div className="text-lg mt-4 opacity-80">
-                    Current Task: {currentProject.tasks.find(task => !task.completed)?.title}
+            <div className="text-center space-y-2">
+              {currentTask ? (
+                <>
+                  <div className="text-xl font-medium flex items-center justify-center gap-2">
+                    Current Task: {currentTask.title}
+                    <span className="text-sm bg-white/20 px-2 py-1 rounded">
+                      {currentTask.projectName}
+                    </span>
                   </div>
-                )}
-              </div>
-            )}
+                  <div className="text-lg opacity-90">
+                    {currentTask.completedTime} / {currentTask.estimatedTime} minutes completed
+                  </div>
+                  <div className="text-lg opacity-90">
+                    {Math.ceil((currentTask.estimatedTime - currentTask.completedTime) / settings.pomodoroTime)} pomodoros to complete
+                  </div>
+                  {currentTask.isRoutine && currentTask.streak > 0 && (
+                    <div className="text-lg opacity-90">
+                      Complete to maintain your {currentTask.streak} day streak! 🔥
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-xl font-medium mb-4">
+                  Select a task to start working
+                </div>
+              )}
+            </div>
           </div>
         </>
       )}

@@ -34,7 +34,36 @@ export default function TaskList({ hideAddProject = false }: TaskListProps) {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [isRoutineTask, setIsRoutineTask] = useState(false);
   const [editingTaskTime, setEditingTaskTime] = useState<{ [key: string]: number }>({});
-  const [showAllTasks, setShowAllTasks] = useState(false);
+  const [viewMode, setViewMode] = useState<'today' | 'all' | 'completed'>('today');
+
+  // Calculate streak for a task
+  const getTaskStreak = (task: any) => {
+    if (!task.isRoutine || !task.completed) return 0;
+    
+    const today = new Date();
+    let streak = 1;
+    let currentDate = new Date(task.dueDate);
+    
+    // Count backwards from the current date
+    while (true) {
+      currentDate.setDate(currentDate.getDate() - 1);
+      const dateString = currentDate.toISOString().split('T')[0];
+      
+      // Check if this task was completed on this date
+      const wasCompletedOnDate = projects
+        .find(p => p.id === task.projectId)
+        ?.tasks.some(t => 
+          t.title === task.title && 
+          t.completed && 
+          t.dueDate === dateString
+        );
+      
+      if (!wasCompletedOnDate) break;
+      streak++;
+    }
+    
+    return streak;
+  };
 
   // Filter tasks for today's view
   const getTodayTasks = () => {
@@ -48,7 +77,8 @@ export default function TaskList({ hideAddProject = false }: TaskListProps) {
           ...task,
           projectName: project.name,
           projectId: project.id,
-          plannedTime: task.plannedTime || 'Unset time'
+          plannedTime: task.plannedTime || 'Unset time',
+          streak: task.isRoutine ? getTaskStreak(task) : 0
         }))
     );
   };
@@ -63,7 +93,8 @@ export default function TaskList({ hideAddProject = false }: TaskListProps) {
         ...task,
         projectName: project.name,
         projectId: project.id,
-        plannedTime: task.plannedTime || 'Unset time'
+        plannedTime: task.plannedTime || 'Unset time',
+        streak: task.isRoutine ? getTaskStreak(task) : 0
       }))
     );
 
@@ -80,6 +111,21 @@ export default function TaskList({ hideAddProject = false }: TaskListProps) {
     });
 
     return tasksByDate;
+  };
+
+  // Get completed tasks
+  const getCompletedTasks = () => {
+    return projects.flatMap(project => 
+      project.tasks
+        .filter(task => task.completed)
+        .map(task => ({
+          ...task,
+          projectName: project.name,
+          projectId: project.id,
+          plannedTime: task.plannedTime || 'Unset time',
+          streak: task.isRoutine ? getTaskStreak(task) : 0
+        }))
+    ).sort((a, b) => new Date(b.dueDate).getTime() - new Date(a.dueDate).getTime());
   };
 
   const handleAddProject = (e: React.FormEvent) => {
@@ -102,7 +148,9 @@ export default function TaskList({ hideAddProject = false }: TaskListProps) {
         forToday: selectedDate === new Date().toISOString().split('T')[0],
         plannedTime: standaloneTaskPlannedTime || 'Unset time',
         dueDate: selectedDate,
-        isRoutine: isRoutineTask
+        isRoutine: isRoutineTask,
+        completedPomodoros: 0,
+        isCurrent: false
       };
       addTask(selectedProjectId, task);
       setStandaloneTaskTitle('');
@@ -126,7 +174,9 @@ export default function TaskList({ hideAddProject = false }: TaskListProps) {
         forToday: !projects.find(p => p.id === projectId)?.isRoutine,
         plannedTime: 'Unset time',
         dueDate: new Date().toISOString().split('T')[0],
-        isRoutine: false
+        isRoutine: false,
+        completedPomodoros: 0,
+        isCurrent: false
       };
       addTask(projectId, task);
       setNewTaskTitle('');
@@ -160,20 +210,42 @@ export default function TaskList({ hideAddProject = false }: TaskListProps) {
           <div className="flex justify-between items-center mb-4">
             <div className="flex items-center gap-4">
               <h2 className="text-lg font-semibold text-gray-900">
-                {showAllTasks ? 'All Tasks' : "Today's Tasks"}
+                {viewMode === 'today' && "Today's Tasks"}
+                {viewMode === 'all' && "All Tasks"}
+                {viewMode === 'completed' && "Completed Tasks"}
               </h2>
-              <label className="inline-flex items-center cursor-pointer">
-                <span className="text-sm text-gray-600 mr-2">Show All</span>
-                <div className="relative">
-                  <input
-                    type="checkbox"
-                    className="sr-only peer"
-                    checked={showAllTasks}
-                    onChange={(e) => setShowAllTasks(e.target.checked)}
-                  />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                </div>
-              </label>
+              <div className="flex rounded-lg border border-gray-300 p-1">
+                <button
+                  onClick={() => setViewMode('today')}
+                  className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                    viewMode === 'today'
+                      ? 'bg-blue-500 text-white'
+                      : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  Today
+                </button>
+                <button
+                  onClick={() => setViewMode('all')}
+                  className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                    viewMode === 'all'
+                      ? 'bg-blue-500 text-white'
+                      : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  All
+                </button>
+                <button
+                  onClick={() => setViewMode('completed')}
+                  className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                    viewMode === 'completed'
+                      ? 'bg-blue-500 text-white'
+                      : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  Completed
+                </button>
+              </div>
             </div>
             <button
               onClick={() => setIsAddingTask(true)}
@@ -184,7 +256,79 @@ export default function TaskList({ hideAddProject = false }: TaskListProps) {
           </div>
           
           <div className="space-y-4">
-            {showAllTasks ? (
+            {viewMode === 'today' && (
+              <>
+                {todayTasks.map((task) => (
+                  <div
+                    key={`${task.projectId}-${task.id}`}
+                    className="bg-white rounded-lg shadow p-4 flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={task.completed}
+                        onChange={(e) =>
+                          updateTask(task.projectId, task.id, {
+                            completed: e.target.checked,
+                          })
+                        }
+                        className="h-5 w-5 rounded border-gray-300"
+                      />
+                      <div>
+                        <span className={`text-gray-900 ${task.completed ? 'line-through text-gray-500' : ''}`}>
+                          {task.title}
+                        </span>
+                        <span className="text-sm text-gray-500 ml-2">
+                          ({task.projectName})
+                        </span>
+                        <span className="text-sm text-gray-500 ml-2">
+                          {task.plannedTime}
+                        </span>
+                        {!task.forToday && (
+                          <span className="text-sm text-gray-500 ml-2">
+                            Due: {new Date(task.dueDate).toLocaleDateString()}
+                          </span>
+                        )}
+                        <div className="flex items-center gap-2 mt-1">
+                          {task.isRoutine && (
+                            <>
+                              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                                Daily
+                              </span>
+                              <span className={`text-xs ${task.streak > 0 ? 'bg-orange-100 text-orange-800' : 'bg-gray-100 text-gray-500'} px-2 py-1 rounded-full flex items-center gap-1`}>
+                                🔥 {task.streak} day{task.streak !== 1 ? 's' : ''}
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <span className="text-sm text-gray-600">
+                        {task.estimatedTime} min
+                      </span>
+                      <button
+                        onClick={() => deleteTask(task.projectId, task.id)}
+                        className="text-gray-400 hover:text-red-500 transition-colors"
+                        title="Delete task"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                
+                {todayTasks.length === 0 && (
+                  <div className="text-center py-8 text-gray-500">
+                    No tasks for today. Click the + button to add tasks.
+                  </div>
+                )}
+              </>
+            )}
+
+            {viewMode === 'all' && (
               Array.from(getAllTasksGroupedByDate().entries()).map(([date, tasks]) => (
                 <div key={date} className="space-y-2">
                   <h3 className="font-medium text-gray-700">
@@ -246,9 +390,11 @@ export default function TaskList({ hideAddProject = false }: TaskListProps) {
                   ))}
                 </div>
               ))
-            ) : (
+            )}
+
+            {viewMode === 'completed' && (
               <>
-                {todayTasks.map((task) => (
+                {getCompletedTasks().map((task) => (
                   <div
                     key={`${task.projectId}-${task.id}`}
                     className="bg-white rounded-lg shadow p-4 flex items-center justify-between"
@@ -265,7 +411,7 @@ export default function TaskList({ hideAddProject = false }: TaskListProps) {
                         className="h-5 w-5 rounded border-gray-300"
                       />
                       <div>
-                        <span className={`text-gray-900 ${task.completed ? 'line-through text-gray-500' : ''}`}>
+                        <span className="text-gray-500 line-through">
                           {task.title}
                         </span>
                         <span className="text-sm text-gray-500 ml-2">
@@ -274,9 +420,12 @@ export default function TaskList({ hideAddProject = false }: TaskListProps) {
                         <span className="text-sm text-gray-500 ml-2">
                           {task.plannedTime}
                         </span>
-                        {!task.forToday && (
-                          <span className="text-sm text-gray-500 ml-2">
-                            Due: {new Date(task.dueDate).toLocaleDateString()}
+                        <span className="text-sm text-gray-500 ml-2">
+                          Completed on: {new Date(task.dueDate).toLocaleDateString()}
+                        </span>
+                        {task.isRoutine && (
+                          <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full ml-2">
+                            Daily
                           </span>
                         )}
                       </div>
@@ -298,9 +447,9 @@ export default function TaskList({ hideAddProject = false }: TaskListProps) {
                   </div>
                 ))}
                 
-                {todayTasks.length === 0 && (
+                {getCompletedTasks().length === 0 && (
                   <div className="text-center py-8 text-gray-500">
-                    No tasks for today. Click the + button to add tasks.
+                    No completed tasks yet.
                   </div>
                 )}
               </>

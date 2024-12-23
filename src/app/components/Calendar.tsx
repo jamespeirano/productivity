@@ -8,6 +8,35 @@ export default function Calendar() {
   const { projects, deleteTask } = useProjects();
   const [selectedDate, setSelectedDate] = useState(new Date());
 
+  // Calculate streak for a task
+  const getTaskStreak = (task: any) => {
+    if (!task.isRoutine || !task.completed) return 0;
+    
+    const today = new Date();
+    let streak = 1;
+    let currentDate = new Date(task.dueDate);
+    
+    // Count backwards from the current date
+    while (true) {
+      currentDate.setDate(currentDate.getDate() - 1);
+      const dateString = currentDate.toISOString().split('T')[0];
+      
+      // Check if this task was completed on this date
+      const wasCompletedOnDate = projects
+        .find(p => p.id === task.projectId)
+        ?.tasks.some(t => 
+          t.title === task.title && 
+          t.completed && 
+          t.dueDate === dateString
+        );
+      
+      if (!wasCompletedOnDate) break;
+      streak++;
+    }
+    
+    return streak;
+  };
+
   // Generate week days
   const weekStart = startOfWeek(selectedDate);
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
@@ -18,15 +47,13 @@ export default function Calendar() {
     return projects.flatMap(project => 
       project.tasks
         .filter(task => 
-          // Include task if:
-          // 1. It's due on this date OR
-          // 2. It's a routine task
           task.dueDate === dateString || task.isRoutine
         )
         .map(task => ({
           ...task,
           projectName: project.name,
-          projectId: project.id
+          projectId: project.id,
+          streak: task.isRoutine ? getTaskStreak(task) : 0
         }))
     );
   };
@@ -83,6 +110,18 @@ export default function Calendar() {
                       Goal: {task.projectName} • {task.estimatedTime} min
                       {task.plannedTime !== 'Unset time' && ` • ${task.plannedTime}`}
                     </p>
+                    <div className="flex items-center gap-2 mt-1">
+                      {task.isRoutine && (
+                        <>
+                          <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                            Daily
+                          </span>
+                          <span className={`text-xs ${task.streak > 0 ? 'bg-orange-100 text-orange-800' : 'bg-gray-100 text-gray-500'} px-2 py-1 rounded-full flex items-center gap-1`}>
+                            🔥 {task.streak} day{task.streak !== 1 ? 's' : ''}
+                          </span>
+                        </>
+                      )}
+                    </div>
                   </div>
                   <button
                     onClick={() => deleteTask(task.projectId, task.id)}
