@@ -1,12 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { format, startOfWeek, addDays, isSameDay } from 'date-fns';
+import { format, startOfWeek, addDays, isSameDay, setHours, setMinutes } from 'date-fns';
 import { useProjects } from '../contexts/ProjectContext';
 
 export default function Calendar() {
   const { projects, deleteTask } = useProjects();
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [view, setView] = useState<'agenda' | 'day'>('agenda');
 
   // Calculate streak for a task
   const getTaskStreak = (task: any) => {
@@ -62,10 +63,164 @@ export default function Calendar() {
   // Get tasks for selected date
   const selectedDateTasks = getTasksForDate(selectedDate);
 
+  // Generate time slots
+  const timeSlots = Array.from({ length: 24 }, (_, i) => {
+    const time = setHours(setMinutes(selectedDate, 0), i);
+    return {
+      time,
+      label: format(time, 'h:mm a'),
+      tasks: selectedDateTasks.filter(task => {
+        const taskTime = task.plannedTime;
+        if (!taskTime) return false;
+        const [hours] = taskTime.split(':').map(Number);
+        return hours === i;
+      })
+    };
+  });
+
+  // Get all-day tasks (tasks without specific time)
+  const allDayTasks = selectedDateTasks.filter(task => !task.plannedTime);
+
+  const renderAgendaView = () => (
+    <div className="space-y-4">
+      {selectedDateTasks.length > 0 ? (
+        selectedDateTasks.map((task) => (
+          <div key={task.id} className="bg-white border rounded-lg p-4">
+            <div className="flex justify-between items-center">
+              <div>
+                <h4 className="font-medium text-gray-900">{task.title}</h4>
+                <p className="text-sm text-gray-500">
+                  {task.estimatedTime} min
+                </p>
+                <div className="flex items-center gap-2 mt-1">
+                  {task.projectId !== 'standalone' && (
+                    <span
+                      className="text-xs px-2 py-1 rounded-full"
+                      style={{
+                        backgroundColor: `${task.projectColor}20`,
+                        color: task.projectColor
+                      }}
+                    >
+                      {task.projectName}
+                    </span>
+                  )}
+                  {task.isRoutine && (
+                    <>
+                      <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                        Daily
+                      </span>
+                      <span className={`text-xs ${task.streak > 0 ? 'bg-orange-100 text-orange-800' : 'bg-gray-100 text-gray-500'} px-2 py-1 rounded-full flex items-center gap-1`}>
+                        🔥 {task.streak} day{task.streak !== 1 ? 's' : ''}
+                      </span>
+                    </>
+                  )}
+                </div>
+              </div>
+              <button
+                onClick={() => deleteTask(task.projectId, task.id)}
+                className="text-gray-400 hover:text-red-500 transition-colors"
+                title="Delete task"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        ))
+      ) : (
+        <div className="text-center py-8 text-gray-500">
+          No tasks scheduled for this date.
+        </div>
+      )}
+    </div>
+  );
+
+  const renderDayView = () => (
+    <div className="space-y-4">
+      {/* All-day tasks section */}
+      {allDayTasks.length > 0 && (
+        <div className="border-b pb-4">
+          <h4 className="text-sm font-medium text-gray-500 mb-2">All-day</h4>
+          <div className="space-y-2">
+            {allDayTasks.map(task => (
+              <div key={task.id} className="bg-gray-50 rounded-lg p-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-sm">{task.title}</span>
+                    {task.projectId !== 'standalone' && (
+                      <span
+                        className="text-xs px-2 py-1 rounded-full"
+                        style={{
+                          backgroundColor: `${task.projectColor}20`,
+                          color: task.projectColor
+                        }}
+                      >
+                        {task.projectName}
+                      </span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => deleteTask(task.projectId, task.id)}
+                    className="text-gray-400 hover:text-red-500 transition-colors"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Time slots */}
+      <div className="space-y-2">
+        {timeSlots.map(({ time, label, tasks }) => (
+          <div key={label} className="flex gap-4">
+            <div className="w-20 text-sm text-gray-500">{label}</div>
+            <div className="flex-1 min-h-[3rem] border-l pl-4">
+              {tasks.map(task => (
+                <div key={task.id} className="bg-gray-50 rounded-lg p-2 mb-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-sm">{task.title}</span>
+                      {task.projectId !== 'standalone' && (
+                        <span
+                          className="text-xs px-2 py-1 rounded-full"
+                          style={{
+                            backgroundColor: `${task.projectColor}20`,
+                            color: task.projectColor
+                          }}
+                        >
+                          {task.projectName}
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => deleteTask(task.projectId, task.id)}
+                      className="text-gray-400 hover:text-red-500 transition-colors"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
   return (
     <div className="bg-white rounded-lg shadow-lg p-6">
-      <div className="mb-6">
-        <div className="grid grid-cols-7 gap-2">
+      {/* Calendar header with view toggle */}
+      <div className="flex justify-between items-center mb-6">
+        <div className="grid grid-cols-7 gap-2 flex-1">
           {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
             <div
               key={day}
@@ -94,64 +249,37 @@ export default function Calendar() {
             );
           })}
         </div>
+        <div className="ml-4">
+          <div className="flex bg-gray-100 rounded-lg p-1">
+            <button
+              onClick={() => setView('agenda')}
+              className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                view === 'agenda'
+                  ? 'bg-white text-gray-900 shadow'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Agenda
+            </button>
+            <button
+              onClick={() => setView('day')}
+              className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                view === 'day'
+                  ? 'bg-white text-gray-900 shadow'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Day
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="mt-6">
         <h3 className="font-medium text-gray-700 mb-3">
           Tasks for {format(selectedDate, 'MMM d, yyyy')}
         </h3>
-        <div className="space-y-4">
-          {selectedDateTasks.length > 0 ? (
-            selectedDateTasks.map((task) => (
-              <div key={task.id} className="bg-white border rounded-lg p-4">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <h4 className="font-medium text-gray-900">{task.title}</h4>
-                    <p className="text-sm text-gray-500">
-                      {task.estimatedTime} min
-                    </p>
-                    <div className="flex items-center gap-2 mt-1">
-                      {task.projectId !== 'standalone' && (
-                        <span
-                          className="text-xs px-2 py-1 rounded-full"
-                          style={{
-                            backgroundColor: `${task.projectColor}20`,
-                            color: task.projectColor
-                          }}
-                        >
-                          {task.projectName}
-                        </span>
-                      )}
-                      {task.isRoutine && (
-                        <>
-                          <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
-                            Daily
-                          </span>
-                          <span className={`text-xs ${task.streak > 0 ? 'bg-orange-100 text-orange-800' : 'bg-gray-100 text-gray-500'} px-2 py-1 rounded-full flex items-center gap-1`}>
-                            🔥 {task.streak} day{task.streak !== 1 ? 's' : ''}
-                          </span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => deleteTask(task.projectId, task.id)}
-                    className="text-gray-400 hover:text-red-500 transition-colors"
-                    title="Delete task"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-            ))
-          ) : (
-            <div className="text-center py-8 text-gray-500">
-              No tasks scheduled for this date.
-            </div>
-          )}
-        </div>
+        {view === 'agenda' ? renderAgendaView() : renderDayView()}
       </div>
     </div>
   );

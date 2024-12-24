@@ -37,6 +37,7 @@ export default function TaskList({ hideAddProject = false, isAddingTask = false,
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [projectColor, setProjectColor] = useState('#000000');
   const [isAddingProject, setIsAddingProject] = useState(false);
+  const [plannedTime, setPlannedTime] = useState('');
 
   // Calculate streak for a task
   const getTaskStreak = (task: any) => {
@@ -154,7 +155,8 @@ export default function TaskList({ hideAddProject = false, isAddingTask = false,
       subtasks: subtasks,
       notes: taskNotes,
       projectId: selectedProjectId,
-      streak: 0
+      streak: 0,
+      plannedTime: plannedTime
     };
 
     addTask(selectedProjectId, newTask);
@@ -165,6 +167,7 @@ export default function TaskList({ hideAddProject = false, isAddingTask = false,
     setIsRoutineTask(false);
     setTaskNotes('');
     setSubtasks([]);
+    setPlannedTime('');
     onAddTaskClose?.();
   };
 
@@ -251,6 +254,18 @@ export default function TaskList({ hideAddProject = false, isAddingTask = false,
                   value={standaloneTaskTime}
                   onChange={(e) => setStandaloneTaskTime(Math.max(1, parseInt(e.target.value) || 1))}
                   min="1"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Planned Time (Optional)
+                </label>
+                <input
+                  type="time"
+                  value={plannedTime}
+                  onChange={(e) => setPlannedTime(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900"
                 />
               </div>

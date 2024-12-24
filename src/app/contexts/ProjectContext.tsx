@@ -28,6 +28,7 @@ export interface Task {
   notes: string;
   projectId: string;
   streak: number;
+  plannedTime?: string;
 }
 
 interface Routine {
