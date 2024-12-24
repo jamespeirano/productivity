@@ -53,6 +53,7 @@ export default function Calendar() {
           ...task,
           projectName: project.name,
           projectId: project.id,
+          projectColor: project.color,
           streak: task.isRoutine ? getTaskStreak(task) : 0
         }))
     );
@@ -107,10 +108,20 @@ export default function Calendar() {
                   <div>
                     <h4 className="font-medium text-gray-900">{task.title}</h4>
                     <p className="text-sm text-gray-500">
-                      Goal: {task.projectName} • {task.estimatedTime} min
-                      {task.plannedTime !== 'Unset time' && ` • ${task.plannedTime}`}
+                      {task.estimatedTime} min
                     </p>
                     <div className="flex items-center gap-2 mt-1">
+                      {task.projectId !== 'standalone' && (
+                        <span
+                          className="text-xs px-2 py-1 rounded-full"
+                          style={{
+                            backgroundColor: `${task.projectColor}20`,
+                            color: task.projectColor
+                          }}
+                        >
+                          {task.projectName}
+                        </span>
+                      )}
                       {task.isRoutine && (
                         <>
                           <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">

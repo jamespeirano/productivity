@@ -96,7 +96,9 @@ export default function Stats() {
         .filter(task => (task.dueDate === today || task.isRoutine) && !task.completed)
         .map(task => ({
           ...task,
-          projectId: project.id
+          projectId: project.id,
+          projectName: project.name,
+          projectColor: project.color
         }))
     );
   };
@@ -122,30 +124,60 @@ export default function Stats() {
     };
   };
 
-  const { totalWorkload, remainingTime } = getTodayWorkload();
+  // Get stats for each project
+  const getProjectStats = () => {
+    const today = new Date().toISOString().split('T')[0];
+    const last7Days = Array.from({ length: 7 }, (_, i) => {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      return date.toISOString().split('T')[0];
+    }).reverse();
 
-  const chartData = {
-    labels: stats.slice(-7).map(stat => format(new Date(stat.date), 'MMM d')),
-    datasets: [
-      {
-        label: 'Hours Worked',
-        data: stats.slice(-7).map(stat => stat.hours),
-        borderColor: 'rgb(59, 130, 246)',
-        backgroundColor: 'rgba(59, 130, 246, 0.5)',
-        tension: 0.3,
-      },
-    ],
+    // Get all projects except standalone
+    const projectsWithStats = projects
+      .filter(project => project.name !== 'Standalone Tasks')
+      .map(project => {
+        const dailyStats = last7Days.map(date => {
+          const completedTasks = project.tasks.filter(task => 
+            task.completed && 
+            task.dueDate === date
+          );
+          
+          const totalMinutes = completedTasks.reduce((total, task) => 
+            total + (task.completedTime || 0), 0
+          );
+          
+          return totalMinutes / 60; // Convert to hours
+        });
+
+        return {
+          label: project.name,
+          data: dailyStats,
+          borderColor: project.color,
+          backgroundColor: `${project.color}50`,
+          tension: 0.3,
+        };
+      });
+
+    return {
+      labels: last7Days.map(date => format(new Date(date), 'MMM d')),
+      datasets: projectsWithStats
+    };
   };
+
+  const { totalWorkload, remainingTime } = getTodayWorkload();
+  const chartData = getProjectStats();
 
   const options = {
     responsive: true,
     plugins: {
       legend: {
         position: 'top' as const,
+        display: true,
       },
       title: {
         display: true,
-        text: 'Daily Work Hours',
+        text: 'Daily Work Hours by Goal',
       },
     },
     scales: {
@@ -155,7 +187,11 @@ export default function Stats() {
           display: true,
           text: 'Hours',
         },
+        stacked: true,
       },
+      x: {
+        stacked: true,
+      }
     },
   };
 
@@ -259,11 +295,24 @@ export default function Stats() {
               <div className="flex justify-between items-center mb-2">
                 <div className="flex items-center gap-2">
                   <span className="font-medium">{task.title}</span>
-                  {task.isRoutine && (
-                    <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
-                      Daily
-                    </span>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {task.projectId !== 'standalone' && (
+                      <span
+                        className="text-xs px-2 py-1 rounded-full"
+                        style={{
+                          backgroundColor: `${task.projectColor}20`,
+                          color: task.projectColor
+                        }}
+                      >
+                        {task.projectName}
+                      </span>
+                    )}
+                    {task.isRoutine && (
+                      <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                        Daily
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="flex items-center gap-3">
                   <button

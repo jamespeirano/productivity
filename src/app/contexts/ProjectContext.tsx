@@ -1,6 +1,17 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { v4 as uuidv4 } from 'uuid';
+
+export interface Project {
+  id: string;
+  name: string;
+  tasks: Task[];
+  dailyGoalHours: number;
+  dailyTimeSpent: number;
+  isRoutine: boolean;
+  color: string;
+}
 
 export interface Task {
   id: string;
@@ -9,17 +20,14 @@ export interface Task {
   estimatedTime: number;
   completedTime: number;
   forToday: boolean;
-  plannedTime?: string;
   dueDate: string;
   isRoutine: boolean;
-  completedPomodoros: number;
   isCurrent: boolean;
-  subtasks: Array<{
-    id: string;
-    title: string;
-    completed: boolean;
-  }>;
+  completedPomodoros: number;
+  subtasks: Array<{ id: string; title: string; completed: boolean }>;
   notes: string;
+  projectId: string;
+  streak: number;
 }
 
 interface Routine {
@@ -30,31 +38,16 @@ interface Routine {
   daysOfWeek: number[];
 }
 
-interface Project {
-  id: string;
-  name: string;
-  tasks: Task[];
-  dailyGoalHours: number;
-  dailyTimeSpent: number;
-  isRoutine: boolean;
-}
-
-interface ProjectContextType {
+export interface ProjectContextType {
   projects: Project[];
   routines: Routine[];
-  currentProject: Project | null;
-  addProject: (name: string, isRoutine?: boolean) => void;
+  addProject: (name: string, color?: string) => void;
   addRoutine: (name: string, timeGoalHours: number, daysOfWeek: number[]) => void;
   addTask: (projectId: string, task: Omit<Task, 'id'>) => void;
   updateTask: (projectId: string, taskId: string, updates: Partial<Task>) => void;
-  updateRoutine: (routineId: string, updates: Partial<Routine>) => void;
   deleteTask: (projectId: string, taskId: string) => void;
-  deleteProject: (projectId: string) => void;
+  updateRoutine: (routineId: string, updates: Partial<Routine>) => void;
   deleteRoutine: (routineId: string) => void;
-  setCurrentProject: (projectId: string | null) => void;
-  updateProject: (projectId: string, updates: Partial<Project>) => void;
-  updateProjectTimeSpent: (projectId: string, additionalHours: number) => void;
-  updateRoutineTimeSpent: (routineId: string, additionalHours: number) => void;
   setCurrentTask: (projectId: string | null, taskId: string | null) => void;
 }
 
@@ -92,18 +85,19 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const addProject = (name: string, isRoutine: boolean = false) => {
-    const newProject: Project = {
-      id: Date.now().toString(),
-      name,
-      tasks: [],
-      dailyGoalHours: 0,
-      dailyTimeSpent: 0,
-      isRoutine,
-    };
-    const updatedProjects = [...projects, newProject];
-    setProjects(updatedProjects);
-    saveToLocalStorage(updatedProjects, routines);
+  const addProject = (name: string, color: string = '#000000') => {
+    setProjects((prevProjects) => [
+      ...prevProjects,
+      {
+        id: uuidv4(),
+        name,
+        tasks: [],
+        dailyGoalHours: 0,
+        dailyTimeSpent: 0,
+        isRoutine: false,
+        color
+      },
+    ]);
   };
 
   const addRoutine = (name: string, timeGoalHours: number, daysOfWeek: number[]) => {
@@ -175,6 +169,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
         dailyGoalHours: 0,
         dailyTimeSpent: 0,
         isRoutine: false,
+        color: '',
       };
       updatedProjects.push(standaloneProject);
     }
@@ -320,19 +315,13 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       value={{
         projects,
         routines,
-        currentProject,
         addProject,
-        addRoutine,
         addTask,
         updateTask,
-        updateRoutine,
         deleteTask,
-        deleteProject,
+        addRoutine,
+        updateRoutine,
         deleteRoutine,
-        setCurrentProject,
-        updateProject,
-        updateProjectTimeSpent,
-        updateRoutineTimeSpent,
         setCurrentTask,
       }}
     >
