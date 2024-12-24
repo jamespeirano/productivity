@@ -41,6 +41,15 @@ interface Routine {
 
 interface Settings {
   timezone: string;
+  timer: {
+    focusDuration: number;
+    breakDuration: number;
+  };
+  notifications: {
+    timerCompletion: boolean;
+    breakReminders: boolean;
+  };
+  theme: 'light' | 'dark' | 'system';
 }
 
 export interface ProjectContextType {
@@ -65,7 +74,16 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [currentProject, setCurrentProjectState] = useState<Project | null>(null);
   const [settings, setSettings] = useState<Settings>({
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    timer: {
+      focusDuration: 25,
+      breakDuration: 5
+    },
+    notifications: {
+      timerCompletion: true,
+      breakReminders: true
+    },
+    theme: 'light'
   });
 
   useEffect(() => {
