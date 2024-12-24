@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useProjects } from '../contexts/ProjectContext';
 import { Task } from '../contexts/ProjectContext';
+import { formatInTimeZone } from 'date-fns-tz';
 
 interface TaskListProps {
   hideAddProject?: boolean;
@@ -21,13 +22,16 @@ export default function TaskList({ hideAddProject = false, isAddingTask = false,
     addTask,
     updateTask,
     deleteTask,
+    settings,
   } = useProjects();
 
   const [newProjectName, setNewProjectName] = useState('');
   const [standaloneTaskTitle, setStandaloneTaskTitle] = useState('');
   const [standaloneTaskTime, setStandaloneTaskTime] = useState(30);
   const [selectedProjectId, setSelectedProjectId] = useState<string>('standalone');
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(
+    formatInTimeZone(new Date(), settings.timezone, 'yyyy-MM-dd')
+  );
   const [isRoutineTask, setIsRoutineTask] = useState(false);
   const [viewMode, setViewMode] = useState<'today' | 'all' | 'completed'>('today');
   const [taskNotes, setTaskNotes] = useState('');
@@ -70,7 +74,7 @@ export default function TaskList({ hideAddProject = false, isAddingTask = false,
 
   // Filter tasks for today's view
   const getTodayTasks = () => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = formatInTimeZone(new Date(), settings.timezone, 'yyyy-MM-dd');
     return projects.flatMap(project => 
       project.tasks
         .filter(task => {
@@ -163,7 +167,7 @@ export default function TaskList({ hideAddProject = false, isAddingTask = false,
     setStandaloneTaskTitle('');
     setStandaloneTaskTime(30);
     setSelectedProjectId('standalone');
-    setSelectedDate(new Date().toISOString().split('T')[0]);
+    setSelectedDate(formatInTimeZone(new Date(), settings.timezone, 'yyyy-MM-dd'));
     setIsRoutineTask(false);
     setTaskNotes('');
     setSubtasks([]);
@@ -294,7 +298,7 @@ export default function TaskList({ hideAddProject = false, isAddingTask = false,
                       type="date"
                       value={selectedDate}
                       onChange={(e) => setSelectedDate(e.target.value)}
-                      min={new Date().toISOString().split('T')[0]}
+                      min={formatInTimeZone(new Date(), settings.timezone, 'yyyy-MM-dd')}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md text-gray-900"
                     />
                   )}

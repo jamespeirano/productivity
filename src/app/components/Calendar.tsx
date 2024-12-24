@@ -1,13 +1,32 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { format, startOfWeek, addDays, isSameDay, setHours, setMinutes } from 'date-fns';
+import { formatInTimeZone } from 'date-fns-tz';
 import { useProjects } from '../contexts/ProjectContext';
 
 export default function Calendar() {
-  const { projects, deleteTask } = useProjects();
+  const { projects, deleteTask, settings } = useProjects();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [view, setView] = useState<'agenda' | 'day'>('agenda');
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  // Update current time every minute
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 60000); // Update every minute
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Get current hour percentage for the time indicator line
+  const getCurrentTimePercentage = () => {
+    const now = new Date();
+    const hours = now.getHours();
+    const minutes = now.getMinutes();
+    return (hours + minutes / 60) / 24 * 100;
+  };
 
   // Calculate streak for a task
   const getTaskStreak = (task: any) => {
@@ -176,7 +195,22 @@ export default function Calendar() {
       )}
 
       {/* Time slots */}
-      <div className="space-y-2">
+      <div className="space-y-2 relative">
+        {/* Current time indicator */}
+        {isSameDay(selectedDate, currentTime) && (
+          <div 
+            className="absolute left-20 right-0 border-t-2 border-red-500 z-10"
+            style={{ 
+              top: `${getCurrentTimePercentage()}%`,
+              borderColor: 'rgba(239, 68, 68, 0.5)'
+            }}
+          >
+            <div className="absolute -left-20 -top-3 text-xs text-red-500">
+              {format(currentTime, 'h:mm a')}
+            </div>
+          </div>
+        )}
+
         {timeSlots.map(({ time, label, tasks }) => (
           <div key={label} className="flex gap-4">
             <div className="w-20 text-sm text-gray-500">{label}</div>
@@ -218,7 +252,7 @@ export default function Calendar() {
 
   return (
     <div className="bg-white rounded-lg shadow-lg p-6">
-      {/* Calendar header with view toggle */}
+      {/* Calendar header with view toggle and current time */}
       <div className="flex justify-between items-center mb-6">
         <div className="grid grid-cols-7 gap-2 flex-1">
           {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
@@ -276,9 +310,14 @@ export default function Calendar() {
       </div>
 
       <div className="mt-6">
-        <h3 className="font-medium text-gray-700 mb-3">
-          Tasks for {format(selectedDate, 'MMM d, yyyy')}
-        </h3>
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-medium text-gray-700">
+            Tasks for {format(selectedDate, 'MMM d, yyyy')}
+          </h3>
+          <div className="text-sm text-gray-500">
+            Current time: {format(currentTime, 'h:mm a')} ({settings.timezone})
+          </div>
+        </div>
         {view === 'agenda' ? renderAgendaView() : renderDayView()}
       </div>
     </div>

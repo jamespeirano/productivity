@@ -39,9 +39,14 @@ interface Routine {
   daysOfWeek: number[];
 }
 
+interface Settings {
+  timezone: string;
+}
+
 export interface ProjectContextType {
   projects: Project[];
   routines: Routine[];
+  settings: Settings;
   addProject: (name: string, color?: string) => void;
   addRoutine: (name: string, timeGoalHours: number, daysOfWeek: number[]) => void;
   addTask: (projectId: string, task: Omit<Task, 'id'>) => void;
@@ -50,6 +55,7 @@ export interface ProjectContextType {
   updateRoutine: (routineId: string, updates: Partial<Routine>) => void;
   deleteRoutine: (routineId: string) => void;
   setCurrentTask: (projectId: string | null, taskId: string | null) => void;
+  updateSettings: (updates: Partial<Settings>) => void;
 }
 
 const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
@@ -58,11 +64,15 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [currentProject, setCurrentProjectState] = useState<Project | null>(null);
+  const [settings, setSettings] = useState<Settings>({
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+  });
 
   useEffect(() => {
     const savedProjects = localStorage.getItem('pomodoroProjects');
     const savedRoutines = localStorage.getItem('pomodoroRoutines');
     const savedCurrentProject = localStorage.getItem('currentProject');
+    const savedSettings = localStorage.getItem('pomodoroSettings');
     
     if (savedProjects) {
       const parsedProjects = JSON.parse(savedProjects);
@@ -76,6 +86,10 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     if (savedRoutines) {
       setRoutines(JSON.parse(savedRoutines));
     }
+
+    if (savedSettings) {
+      setSettings(JSON.parse(savedSettings));
+    }
   }, []);
 
   const saveToLocalStorage = (newProjects: Project[], newRoutines: Routine[], currentId: string | null = null) => {
@@ -84,6 +98,14 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
     if (currentId) {
       localStorage.setItem('currentProject', currentId);
     }
+  };
+
+  const updateSettings = (updates: Partial<Settings>) => {
+    setSettings(prev => {
+      const newSettings = { ...prev, ...updates };
+      localStorage.setItem('pomodoroSettings', JSON.stringify(newSettings));
+      return newSettings;
+    });
   };
 
   const addProject = (name: string, color: string = '#000000') => {
@@ -316,6 +338,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
       value={{
         projects,
         routines,
+        settings,
         addProject,
         addTask,
         updateTask,
@@ -324,6 +347,7 @@ export function ProjectProvider({ children }: { children: ReactNode }) {
         updateRoutine,
         deleteRoutine,
         setCurrentTask,
+        updateSettings,
       }}
     >
       {children}
